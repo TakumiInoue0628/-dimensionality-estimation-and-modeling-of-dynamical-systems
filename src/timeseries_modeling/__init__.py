@@ -17,13 +17,14 @@ class Three_Layer_Feedforward_NN_using_ELM():
         self.N_z = hidden_size
         self.N_y = output_size
         self.sigma = input_weight_scale
-        if activation_function=="sigmoid": self.g = sigmoid
-        elif activation_function=="tanh": self.g = tanh
+        self.active_func = activation_function
+        if self.active_func=="sigmoid": self.g = sigmoid
+        elif self.active_func=="tanh": self.g = tanh
         else: self.g = linear
         ### Create W_in
         self.W_in = np.random.uniform(-self.sigma, self.sigma, (self.N_z, self.N_x)).astype(np.float64)
         ### Create I (identity array)
-        self. I = np.identity(self.N_z)
+        self.I = np.identity(self.N_z)
 
     def fit(self, X, Y, ridge_parameter=1e-3):
         X = X.T
@@ -55,5 +56,36 @@ class Three_Layer_Feedforward_NN_using_ELM():
             ### x(i+1) <--- y(i)
             X[:, i+1] = Y[:, i]
         return Y.T
+    
+    def lyapunov_calculation(self, X_init, run_size, dt):
+        if self.active_func != "tanh":
+            print("Lyapunov calculation cannot be performed unless the activation function is 'tanh'.")
+            pass
+        else:
+            X = np.zeros((self.N_x, run_size+1))
+            Z = np.zeros((self.N_z, run_size+1))
+            Y = np.zeros((self.N_y, run_size))
+            Q = np.eye(self.N_z)
+            W = self.W_in @ self.W_out
+            mu = np.zeros(self.N_z)
+            mu_sum = 0
+            X[:, 0] = X_init.T
+            for i in tqdm(range(run_size), desc='Lyaqunov Caluculation', leave=False):
+                ### Mapping from X (input vector) to Z (hidden vector)
+                Z[:, i] = self.g(self.W_in @ X[:, i])
+                ### Mapping from Z (hidden vector) to Y (output vector)
+                Y[:, i] = self.W_out @ Z[:, i]
+                ### x(i+1) <--- y(i)
+                X[:, i+1] = Y[:, i]
+                ### Compute Jacobian
+                J = W * (np.ones((self.N_z, self.N_z)) - Z[:, i]**2)
+                ### Compute the qr factorization
+                Q, R = np.linalg.qr(J @ Q, 'complete')
+                ### Compute lyapunov-exponents
+                mu += np.log(np.abs(np.diag(R)))
+            mu /= (run_size * dt)
+        return mu
+            
+
 
 
